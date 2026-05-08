@@ -326,7 +326,7 @@ def evolutionary_training():
         # Sauvegarde toute la génération + seed
         save_generation(population, gen + 1, seed)
 
-        population = [mutate(best_model) for _ in range(SETTINGS["POP_SIZE"])]
+        population = [best_model] + [mutate(best_model) for _ in range(SETTINGS["POP_SIZE"] - 1)]
 
     return best_model_ever
 
@@ -512,7 +512,7 @@ def play_best_ai():
                 if event.key == pygame.K_LEFT:
                     time_rate = 12
                 elif event.key == pygame.K_RIGHT:
-                    time_rate = 480
+                    time_rate = 400
             else :
                 time_rate = SETTINGS["FPS"]
 
@@ -539,6 +539,7 @@ def play_best_ai():
         font = pygame.font.Font(None, 36)
         text = font.render(f"Score: {game.score}", True, (0, 0, 0))
         game.screen.blit(text, (10, 10))
+        game.screen.blit(f"Output: {output:.2f}", (50, 10))
         pygame.display.flip()
 
         if done:
@@ -577,7 +578,7 @@ def Menu():
         game = FlappyBirdGame()
         game.run()
     elif choice == '2':
-        approx_time = SETTINGS["GENERATIONS"] * SETTINGS["POP_SIZE"] * SETTINGS["MAX_STEPS"] // 5000 // 2
+        approx_time = SETTINGS["GENERATIONS"] * SETTINGS["POP_SIZE"] * SETTINGS["MAX_STEPS"] // 30000
         confirm = input(f"L'entraînement peut prendre environ {approx_time:.1f} secondes. Continuer ? (o/n) ")
         if confirm.lower() == 'o':
             evolutionary_training()
