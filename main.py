@@ -21,7 +21,7 @@ def customize_settings():
     """Menu to customize genetic algorithm parameters"""
     clear_screen()
     print("╔" + "═"*76 + "╗")
-    print("║" + " "*18 + "⚙️  CUSTOMIZE EVOLUTION PARAMETERS" + " "*24 + "║")
+    print("║" + " "*19 + "⚙️  CUSTOMIZE EVOLUTION PARAMETERS" + " "*25 + "║")
     print("╚" + "═"*76 + "╝")
     
     # Parameter descriptions
@@ -53,17 +53,17 @@ def show_menu():
     print("╔" + "═"*76 + "╗")
     print("║" + " "*24 + "🎮 FLAPPYBIRD AI MENU" + " "*31 + "║")
     print("╠" + "═"*76 + "╣")
-    print("║  1️  Play manually                                                   ║")
-    print("║  2️  Train AI population (Genetic Algorithm)                         ║")
-    print("║  3  Watch best AI play                                              ║")
-    print("║  4  Visualize full generation                                       ║")
-    print("║  5  Customize evolution parameters                                  ║")
-    print("║                                                                     ║")
-    print("║  6  Save best AI model                                              ║")
-    print("║  7  Load saved model                                                ║")
-    print("║  8  Delete model                                                    ║")
-    print("║                                                                     ║")
-    print("║  0  Exit                                                            ║")
+    print("║  1️  Play manually                                                          ║")
+    print("║  2️  Train AI population (Genetic Algorithm)                                ║")
+    print("║  3  Watch best AI play                                                     ║")
+    print("║  4  Visualize full generation                                              ║")
+    print("║  5  Customize evolution parameters                                         ║")
+    print("║                                                                            ║")
+    print("║  6  Save best AI model                                                     ║")
+    print("║  7  Load saved model                                                       ║")
+    print("║  8  Delete model                                                           ║")
+    print("║                                                                            ║")
+    print("║  0  Exit                                                                   ║")
     print("╚" + "═"*76 + "╝")
 
 
