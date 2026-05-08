@@ -150,7 +150,7 @@ def evolutionary_training():
         save_generation(population, gen + 1, current_seed)
 
         # Check for early stopping: best model hitting MAX_STEPS consistently
-        if stats["best_hit_max_steps_consecutive"] >= 5:  # 5 generations of MAX_STEPS
+        if stats["best_hit_max_steps_consecutive"] >= 6:  # 6 generations of MAX_STEPS
             print("\n" + "-"*80)
             print(f"⚠️  Best model hit MAX_STEPS {stats['best_hit_max_steps_consecutive']} times consecutively!")
             print(f"    This means it can't improve without increasing MAX_STEPS.")
