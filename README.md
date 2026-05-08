@@ -39,7 +39,7 @@ python main.py
 ### Manual Play
 ```bash
 python main.py
-# Select option 10: Play the Game
+# Select option 1: Play the Game
 ```
 
 ## 🎮 Controls
