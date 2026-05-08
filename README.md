@@ -90,11 +90,11 @@ fitness = game.score × 10 + steps_survived × 0.1
 Prioritizes distance traveled, rewards survivorship.
 
 ## 📈 Expected Results
-
+( depends on the max steps )
 After 50 generations:
-- **Gen 1**: Average ~2 pipes, best ~3
-- **Gen 10**: Average ~30 pipes, best ~65
-- **Gen 30**: Average ~110 pipes, best ~200+
+- **Gen 1**: Average ~0 pipes, best ~0-1
+- **Gen 10**: Average ~0.2 pipes, best ~1
+- **Gen 30**: Average ~25 pipes, best ~50+
 - **Gen 50**: Average ~150+ pipes, best ~inf
 
 Best model typically reaches **inf pipes** without collision.
