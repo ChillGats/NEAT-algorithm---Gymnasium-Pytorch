@@ -14,7 +14,6 @@ SETTINGS = {
     "SCREEN_HEIGHT": 600,
     "PIPE_WIDTH": 80,
     "PIPE_HEIGHT": 500,
-
     "PIPE_GAP": 175,
     "PIPE_VELOCITY": 2, 
     "BIRD_SIZE": 30, 
@@ -25,7 +24,8 @@ SETTINGS = {
     "POP_SIZE": 25,
     "GENERATIONS": 50,
     "MAX_STEPS": 5000,
-    "MUTATION_STD": 0.08,
+    "MUTATION_STD": 0.1,
+    "MUTATION_RATE": 0.25,
 
     "FPS": 60,
     "VISUAL_DELAY": 10
@@ -40,9 +40,6 @@ os.makedirs(GENERATIONS_FOLDER, exist_ok=True)
 
 CURRENT_DIR = os.path.dirname(__file__)
 ASSETS_PATH = os.path.join(CURRENT_DIR,"..", "images")
-
-# CORRECTION 3 : Pygame s'initialise UNE SEULE FOIS pour tout le script
-pygame.init()
 
 # === CLASSES ===
 class FlappyBirdGame:
@@ -62,7 +59,6 @@ class FlappyBirdGame:
         self.render_mode = render_mode
         self.screen = None
         
-        # CORRECTION 3 : On charge les images UNIQUEMENT si un humain regarde
         if self.render_mode == "human":
             self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
             pygame.display.set_caption("Flappy Bird")
@@ -115,10 +111,12 @@ class FlappyBirdGame:
                 self.done = True
                 reward = -3
 
+            # --- CORRECTION DU BUG DE SCORE ---
             if top_pipe.right < bird_rect.left:
-                self.score += 1
-                reward += 1
-                self.passed_pipes.add(i)
+                if i not in self.passed_pipes:  # Vérifie que le tuyau n'a pas DÉJÀ été compté
+                    self.score += 1
+                    reward += 5   # Belle récompense pour l'IA
+                    self.passed_pipes.add(i)
 
             if top_pipe.centerx < self.SCREEN_WIDTH // 2 and i == len(self.pipe_pairs) - 1:
                 new_pipe_needed = True
@@ -128,6 +126,19 @@ class FlappyBirdGame:
 
         self.pipe_pairs = [(top, bottom) for (top, bottom) in self.pipe_pairs if top.right > 0]
         return reward
+
+    def draw_pipes(self):
+        if not self.screen:
+            return
+
+        for top_pipe, bottom_pipe in self.pipe_pairs:
+            top_x = top_pipe.centerx - self.pipe_img.get_width() // 2 - 6
+            top_y = top_pipe.bottom - self.pipe_img_flipped.get_height() + self.mg
+            bottom_x = bottom_pipe.centerx - self.pipe_img.get_width() // 2 - 6
+            bottom_y = bottom_pipe.top - self.mg
+
+            self.screen.blit(self.pipe_img, (top_x, top_y))
+            self.screen.blit(self.pipe_img_flipped, (bottom_x, bottom_y))
 
     def get_obs(self):
         next_pipe = None
@@ -201,17 +212,16 @@ class FlappyBirdGame:
             self.bird_y += self.bird_velocity
             bird_rect = pygame.Rect(50, int(self.bird_y), self.BIRD_SIZE, self.BIRD_SIZE)
 
-            reward = self.update_pipes(bird_rect, draw=False)
+            reward = self.update_pipes(bird_rect)
 
             if self.bird_y < 0 or self.bird_y > self.SCREEN_HEIGHT:
                 self.done = True
 
             self.screen.fill((135, 206, 235))
+            self.draw_pipes()
             angle = -self.bird_velocity * 3
             rotated_bird = pygame.transform.rotate(self.bird_img, angle)
             self.screen.blit(rotated_bird, (bird_rect.x - 20, bird_rect.y - 10))
-
-            self.update_pipes(bird_rect, draw=True)
 
             font = pygame.font.Font(None, 36)
             text = font.render(f"Score: {self.score}", True, (0, 0, 0))
@@ -230,7 +240,7 @@ class NeuralNet(nn.Module):
         hidden_size = hidden_size if hidden_size else SETTINGS["HIDDEN_SIZE"]
         self.net = nn.Sequential(
             nn.Linear(input_size, hidden_size),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(hidden_size, 1),
             nn.Sigmoid()
         )
@@ -238,14 +248,102 @@ class NeuralNet(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-def mutate(model, std=None):
+# === NOUVEAUX OPÉRATEURS GÉNÉTIQUES ===
+
+def crossover(parent1, parent2):
+    """Mélange les poids de deux réseaux de neurones (50/50)."""
+    child = NeuralNet(hidden_size=SETTINGS["HIDDEN_SIZE"])
+    state1 = parent1.state_dict()
+    state2 = parent2.state_dict()
+    child_state = {}
+    
+    with torch.no_grad():
+        for key in state1:
+            # Crée un masque aléatoire de 0 et 1 pour choisir quel parent donne quel neurone
+            mask = torch.rand_like(state1[key]) > 0.5
+            # Combine les gènes
+            child_state[key] = torch.where(mask, state1[key], state2[key])
+            
+    child.load_state_dict(child_state)
+    return child
+
+def mutate(model, mutation_rate=0.2, std=None):
+    """Ne mute que 20% des poids, pour ne pas détruire l'apprentissage."""
     std = std if std else SETTINGS["MUTATION_STD"]
     new_model = NeuralNet(hidden_size=SETTINGS["HIDDEN_SIZE"])
     new_model.load_state_dict(model.state_dict())
+    
     with torch.no_grad():
         for param in new_model.parameters():
-            param.add_(torch.randn_like(param) * std)
+            # Choisit aléatoirement 20% des poids à muter
+            mask = (torch.rand_like(param) < mutation_rate).float()
+            noise = torch.randn_like(param) * std
+            # N'ajoute le bruit qu'aux poids sélectionnés
+            param.add_(mask * noise)
+            
     return new_model
+
+
+def evolutionary_training():
+    global best_model_ever, best_score_ever
+    population = [NeuralNet(hidden_size=SETTINGS["HIDDEN_SIZE"]) for _ in range(SETTINGS["POP_SIZE"])]
+    
+    # On garde les 5 meilleurs à chaque fois (20% de la population de 25)
+    ELITE_SIZE = 5 
+
+    for gen in range(SETTINGS["GENERATIONS"]):
+        pygame.init()
+        current_seed = random.randint(0, 999999)
+
+        scores = []
+        for model in population:
+            random.seed(current_seed)
+            np.random.seed(current_seed)
+            torch.manual_seed(current_seed)
+            scores.append(evaluate(model))
+
+        # --- NOUVELLE SÉLECTION (LE TOURNOI) ---
+        # On trie la population du meilleur au pire score
+        sorted_pairs = sorted(zip(scores, population), key=lambda x: x[0], reverse=True)
+        
+        # On extrait les X meilleurs (les Élites)
+        elites = [p[1] for p in sorted_pairs[:ELITE_SIZE]]
+        
+        best_score = sorted_pairs[0][0]
+        avg_score = sum(scores) / len(scores)
+
+        print(f"Génération {gen + 1:02d}/{SETTINGS['GENERATIONS']} | Moy: {avg_score:6.2f} | Top: {best_score:6.2f}")
+
+        # Sauvegarde du champion absolu
+        if best_score > best_score_ever:
+            best_score_ever = best_score
+            best_model_ever = elites[0]
+
+        save_generation(population, gen + 1, current_seed)
+
+        # --- REPRODUCTION ---
+        # La nouvelle génération commence avec nos élites intactes (pour ne jamais régresser)
+        new_population = list(elites)
+
+        # On remplit le reste de la population avec des enfants
+        while len(new_population) < SETTINGS["POP_SIZE"]:
+            # On choisit 2 parents au hasard parmi l'élite
+            p1, p2 = random.sample(elites, 2)
+            
+            # Croisement
+            child = crossover(p1, p2)
+            
+            # Mutation (Rate = 20% des gènes)
+            child = mutate(child, mutation_rate=SETTINGS["MUTATION_RATE"], std=SETTINGS["MUTATION_STD"])
+            
+            new_population.append(child)
+
+        population = new_population
+
+    random.seed() 
+    print("\n✅ Entraînement terminé !")
+    return best_model_ever
+
 
 def evaluate(model):
     game = FlappyBirdGame(render_mode=None)
@@ -260,40 +358,6 @@ def evaluate(model):
         total_reward += reward
         steps += 1
     return total_reward
-
-def evolutionary_training():
-    global best_model_ever, best_score_ever
-    population = [NeuralNet(hidden_size=SETTINGS["HIDDEN_SIZE"]) for _ in range(SETTINGS["POP_SIZE"])]
-
-    for gen in range(SETTINGS["GENERATIONS"]):
-        # On définit le niveau (la graine) pour TOUTE la génération
-        current_seed = random.randint(0, 999999)
-
-        scores = []
-        for model in population:
-            # CORRECTION 1 : On reset la graine AVANT chaque oiseau pour une vraie équité
-            random.seed(current_seed)
-            np.random.seed(current_seed)
-            torch.manual_seed(current_seed)
-            scores.append(evaluate(model))
-
-        best_idx = int(np.argmax(scores))
-        best_model = population[best_idx]
-
-        print(f"Génération {gen + 1}, Meilleur score: {scores[best_idx]:.2f}")
-
-        if scores[best_idx] > best_score_ever:
-            best_score_ever = scores[best_idx]
-            best_model_ever = best_model
-
-        save_generation(population, gen + 1, current_seed)
-
-        # CORRECTION 2 : On garde le champion absolu (position 0) pour ne pas régresser
-        population = [best_model] + [mutate(best_model) for _ in range(SETTINGS["POP_SIZE"] - 1)]
-
-    # Libère l'aléatoire pour le reste du jeu
-    random.seed()
-    return best_model_ever
 
 def save_generation(models, generation, seed):
     gen_folder = os.path.join(GENERATIONS_FOLDER, f"gen_{generation:03d}")
@@ -350,7 +414,7 @@ def visualize_generation():
     game_clock.tick(SETTINGS["FPS"])
     time_rate = SETTINGS["FPS"]
     
-    while not done and steps < SETTINGS["MAX_STEPS"]:
+    while not done:
         game_clock.tick(time_rate)
 
         for event in pygame.event.get():
@@ -409,7 +473,7 @@ def visualize_generation():
         if all_dead: done = True
 
     print("✅ Visualisation terminée.")
-    random.seed() # On libère la seed ici aussi
+    random.seed()
     pygame.time.wait(1500)
 
 def play_best_ai():
@@ -446,19 +510,17 @@ def play_best_ai():
         obs, reward, done, _ = game.step(action)
 
         game.screen.fill((135, 206, 235))
+        game.draw_pipes()
         bird_rect = pygame.Rect(50, int(game.bird_y), game.BIRD_SIZE, game.BIRD_SIZE)
 
         angle = -game.bird_velocity * 3
         rotated_bird = pygame.transform.rotate(game.bird_img, angle)
         game.screen.blit(rotated_bird, (bird_rect.x -20 , bird_rect.y -10))
 
-        game.update_pipes(bird_rect, draw=True)
-
-        font = pygame.font.Font(None, 36) 
+        font = pygame.font.Font(None, 36)
         text = font.render(f"Score: {game.score}", True, (0, 0, 0))
         game.screen.blit(text, (10, 10))
         
-        # CORRECTION 4 : Le texte de l'output est proprement rendu en Surface
         text_output = font.render(f"Output: {output:.2f}", True, (255, 0, 0))
         game.screen.blit(text_output, (10, 50))
         
