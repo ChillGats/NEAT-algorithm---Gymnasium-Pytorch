@@ -8,25 +8,24 @@ import time
 import os
 import json
 
-
 # === PARAMÈTRES SIMULATION ===
 SETTINGS = {
     "SCREEN_WIDTH": 1000,
     "SCREEN_HEIGHT": 600,
     "PIPE_WIDTH": 80,
     "PIPE_HEIGHT": 500,
+
     "PIPE_GAP": 175,
-    "PIPE_VELOCITY": 2, # 2
-    "BIRD_SIZE": 30, # 30
+    "PIPE_VELOCITY": 2, 
+    "BIRD_SIZE": 30, 
     "GRAVITY": 0.5,
     "FLAP_STRENGTH": -10,
 
     "HIDDEN_SIZE": 32,
-
-    "POP_SIZE": 10,
-    "GENERATIONS": 75,
-    "MAX_STEPS": 3000,
-    "MUTATION_STD": 0.4,
+    "POP_SIZE": 25,
+    "GENERATIONS": 50,
+    "MAX_STEPS": 5000,
+    "MUTATION_STD": 0.08,
 
     "FPS": 60,
     "VISUAL_DELAY": 10
@@ -35,23 +34,19 @@ SETTINGS = {
 best_model = None
 best_model_ever = None
 best_score_ever = float('-inf')
-best_weights_ever = None
 
-# --- Ajoute ces variables globales ---
 GENERATIONS_FOLDER = "models/generations"
 os.makedirs(GENERATIONS_FOLDER, exist_ok=True)
 
-# Récupère le chemin absolu vers le fichier actuel
 CURRENT_DIR = os.path.dirname(__file__)
 ASSETS_PATH = os.path.join(CURRENT_DIR,"..", "images")
 
-
-
+# CORRECTION 3 : Pygame s'initialise UNE SEULE FOIS pour tout le script
+pygame.init()
 
 # === CLASSES ===
 class FlappyBirdGame:
     def __init__(self, render_mode="human"):
-        pygame.init()
         self.settings = SETTINGS
         self.SCREEN_WIDTH = self.settings["SCREEN_WIDTH"]
         self.SCREEN_HEIGHT = self.settings["SCREEN_HEIGHT"]
@@ -64,23 +59,22 @@ class FlappyBirdGame:
         self.FLAP_STRENGTH = self.settings["FLAP_STRENGTH"]
         self.mg = 180
 
-
+        self.render_mode = render_mode
         self.screen = None
-        if render_mode == "human":
+        
+        # CORRECTION 3 : On charge les images UNIQUEMENT si un humain regarde
+        if self.render_mode == "human":
             self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
             pygame.display.set_caption("Flappy Bird")
 
             self.pipe_img = pygame.image.load(os.path.join(ASSETS_PATH, "pipe_img.png")).convert_alpha()
-
-            self.pipe_img = pygame.transform.scale(self.pipe_img, (325, 600))  # largeur, hauteur
+            self.pipe_img = pygame.transform.scale(self.pipe_img, (325, 600))
             self.pipe_img_flipped = pygame.transform.flip(self.pipe_img, False, True)
 
             self.bird_img = pygame.image.load(os.path.join(ASSETS_PATH, "bird.png")).convert_alpha()
             self.bird_img = pygame.transform.scale(self.bird_img, (self.BIRD_SIZE * 2, self.BIRD_SIZE * 1.5))
 
         self.clock = pygame.time.Clock()
-        self.render_mode = render_mode
-
         self.reset()
 
     def reset(self):
@@ -102,30 +96,20 @@ class FlappyBirdGame:
     def update_pipes(self, bird_rect, draw=False, fps_augmented=False):
         reward = 0
         new_pipe_needed = False
-
-        if fps_augmented: self.pipe_vel = self.PIPE_VELOCITY * 2
-
-        else : self.pipe_vel = self.PIPE_VELOCITY
+        self.pipe_vel = self.PIPE_VELOCITY * 2 if fps_augmented else self.PIPE_VELOCITY
 
         for i, (top_pipe, bottom_pipe) in enumerate(self.pipe_pairs):
             top_pipe.x -= self.pipe_vel
             bottom_pipe.x -= self.pipe_vel
 
             if draw and self.screen:
-
-                # Centrage horizontal (avec décalage compensé)
                 top_x = top_pipe.centerx - self.pipe_img.get_width() // 2 - 6
                 top_y = top_pipe.bottom - self.pipe_img_flipped.get_height() + self.mg
                 bottom_x = bottom_pipe.centerx - self.pipe_img.get_width() // 2 - 6
                 bottom_y = bottom_pipe.top - self.mg
 
-                # Affichage des tuyaux
-                self.screen.blit(self.pipe_img, (top_x, top_y))  # Tuyau du haut
-                self.screen.blit(self.pipe_img_flipped, (bottom_x, bottom_y))  # Tuyau du bas
-
-                # (Optionnel) debug hitbox
-                #pygame.draw.rect(self.screen, (0, 255, 0), top_pipe, 1)
-                #pygame.draw.rect(self.screen, (0, 255, 0), bottom_pipe, 1)
+                self.screen.blit(self.pipe_img, (top_x, top_y))
+                self.screen.blit(self.pipe_img_flipped, (bottom_x, bottom_y))
 
             if bird_rect.colliderect(top_pipe) or bird_rect.colliderect(bottom_pipe):
                 self.done = True
@@ -142,12 +126,7 @@ class FlappyBirdGame:
         if new_pipe_needed:
             self.pipe_pairs.append(self.create_pipe_pair())
 
-        self.pipe_pairs = [
-            (top, bottom)
-            for (top, bottom) in self.pipe_pairs
-            if top.right > 0
-        ]
-
+        self.pipe_pairs = [(top, bottom) for (top, bottom) in self.pipe_pairs if top.right > 0]
         return reward
 
     def get_obs(self):
@@ -170,10 +149,8 @@ class FlappyBirdGame:
         return [
             self.bird_y / self.SCREEN_HEIGHT,
             self.bird_velocity / 10.0,
-
             pipe_x_dist / self.SCREEN_WIDTH,
             (pipe_y_center - self.bird_y) / self.SCREEN_HEIGHT,
-
             gap_top / self.SCREEN_HEIGHT,
             gap_bottom / self.SCREEN_HEIGHT
         ]
@@ -201,14 +178,13 @@ class FlappyBirdGame:
 
     def run(self):
         running = True
-        self.reset()  # Assure un état propre au départ
-        pygame.time.wait(500)  # Petit délai initial
+        self.reset()
+        pygame.time.wait(500)
 
         while running:
             self.clock.tick(SETTINGS["FPS"])
             action = 0
 
-            # Gestion des événements
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -218,41 +194,30 @@ class FlappyBirdGame:
                     if event.key == pygame.K_SPACE:
                         action = 1
 
-            # === Logique du jeu ===
             if action == 1:
                 self.bird_velocity = self.FLAP_STRENGTH
 
             self.bird_velocity += self.GRAVITY
             self.bird_y += self.bird_velocity
-
             bird_rect = pygame.Rect(50, int(self.bird_y), self.BIRD_SIZE, self.BIRD_SIZE)
 
-            # Met à jour les tuyaux et récupère la récompense
             reward = self.update_pipes(bird_rect, draw=False)
 
-            # Vérifie les collisions avec le sol/plafond
             if self.bird_y < 0 or self.bird_y > self.SCREEN_HEIGHT:
                 self.done = True
 
-            # === Affichage ===
-            self.screen.fill((135, 206, 235))  # ciel bleu
-
-            # Dessin de l'oiseau
+            self.screen.fill((135, 206, 235))
             angle = -self.bird_velocity * 3
             rotated_bird = pygame.transform.rotate(self.bird_img, angle)
             self.screen.blit(rotated_bird, (bird_rect.x - 20, bird_rect.y - 10))
 
-            # Affichage des tuyaux
             self.update_pipes(bird_rect, draw=True)
 
-            # Score
             font = pygame.font.Font(None, 36)
             text = font.render(f"Score: {self.score}", True, (0, 0, 0))
             self.screen.blit(text, (10, 10))
-
             pygame.display.flip()
 
-            # Fin de partie
             if self.done:
                 pygame.time.wait(1000)
                 self.reset()
@@ -273,7 +238,6 @@ class NeuralNet(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-
 def mutate(model, std=None):
     std = std if std else SETTINGS["MUTATION_STD"]
     new_model = NeuralNet(hidden_size=SETTINGS["HIDDEN_SIZE"])
@@ -282,7 +246,6 @@ def mutate(model, std=None):
         for param in new_model.parameters():
             param.add_(torch.randn_like(param) * std)
     return new_model
-
 
 def evaluate(model):
     game = FlappyBirdGame(render_mode=None)
@@ -298,20 +261,20 @@ def evaluate(model):
         steps += 1
     return total_reward
 
-
 def evolutionary_training():
     global best_model_ever, best_score_ever
     population = [NeuralNet(hidden_size=SETTINGS["HIDDEN_SIZE"]) for _ in range(SETTINGS["POP_SIZE"])]
 
     for gen in range(SETTINGS["GENERATIONS"]):
-        seed = random.randint(0, 999999)
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
+        # On définit le niveau (la graine) pour TOUTE la génération
+        current_seed = random.randint(0, 999999)
 
         scores = []
         for model in population:
-            # Fixer la seed dans evaluate si nécessaire (recréation jeu inside)
+            # CORRECTION 1 : On reset la graine AVANT chaque oiseau pour une vraie équité
+            random.seed(current_seed)
+            np.random.seed(current_seed)
+            torch.manual_seed(current_seed)
             scores.append(evaluate(model))
 
         best_idx = int(np.argmax(scores))
@@ -323,39 +286,32 @@ def evolutionary_training():
             best_score_ever = scores[best_idx]
             best_model_ever = best_model
 
-        # Sauvegarde toute la génération + seed
-        save_generation(population, gen + 1, seed)
+        save_generation(population, gen + 1, current_seed)
 
+        # CORRECTION 2 : On garde le champion absolu (position 0) pour ne pas régresser
         population = [best_model] + [mutate(best_model) for _ in range(SETTINGS["POP_SIZE"] - 1)]
 
+    # Libère l'aléatoire pour le reste du jeu
+    random.seed()
     return best_model_ever
 
 def save_generation(models, generation, seed):
     gen_folder = os.path.join(GENERATIONS_FOLDER, f"gen_{generation:03d}")
     os.makedirs(gen_folder, exist_ok=True)
-
-    # Sauvegarde seed dans un fichier json
     with open(os.path.join(gen_folder, "seed.json"), "w") as f:
         json.dump({"seed": seed}, f)
-
-    # Sauvegarde chaque modèle dans un fichier séparé
     for i, model in enumerate(models):
         filename = os.path.join(gen_folder, f"model_{i:03d}.pth")
         torch.save(model.state_dict(), filename)
-
 
 def load_generation_models(generation):
     gen_folder = os.path.join(GENERATIONS_FOLDER, f"gen_{generation:03d}")
     if not os.path.exists(gen_folder):
         print(f"❌ Génération {generation} non trouvée.")
         return None, None
-
-    # Charge seed
     with open(os.path.join(gen_folder, "seed.json"), "r") as f:
         data = json.load(f)
         seed = data.get("seed", None)
-
-    # Charge tous les modèles
     model_files = sorted([f for f in os.listdir(gen_folder) if f.endswith(".pth")])
     models = []
     for f in model_files:
@@ -367,21 +323,16 @@ def load_generation_models(generation):
 def visualize_generation():
     generation = int(input("Quelle génération visualiser ? "))
     models, seed = load_generation_models(generation)
+    if models is None: return
 
-    if models is None:
-        return
-
-    # Fixer la seed pour un niveau identique
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
 
-    # Créer le jeu avec le même niveau pour toutes les IA
     base_game = FlappyBirdGame(render_mode="human")
     game_clock = pygame.time.Clock()
 
-    # États individuels pour chaque IA
     birds = []
     for model in models:
         bird = {
@@ -398,37 +349,27 @@ def visualize_generation():
     done = False
     game_clock.tick(SETTINGS["FPS"])
     time_rate = SETTINGS["FPS"]
+    
     while not done and steps < SETTINGS["MAX_STEPS"]:
         game_clock.tick(time_rate)
 
-
-
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.display.quit()  # ferme juste la fenêtre
+                pygame.display.quit()
                 return
-
             if event.type == pygame.KEYDOWN:
-
-                if event.key == pygame.K_LEFT:
-                    time_rate = 12
-                elif event.key == pygame.K_RIGHT:
-                    time_rate = 480
-            else :
+                if event.key == pygame.K_LEFT: time_rate = 12
+                elif event.key == pygame.K_RIGHT: time_rate = 480
+            else:
                 time_rate = SETTINGS["FPS"]
 
-        # Fond
         base_game.screen.fill((135, 206, 235))
-
-        # Affichage et mise à jour des tuyaux partagés
         dummy_rect = pygame.Rect(50, 0, base_game.BIRD_SIZE, base_game.BIRD_SIZE)
         base_game.update_pipes(dummy_rect, draw=True, fps_augmented=True)
 
         all_dead = True
-
         for bird in birds:
-            if not bird["alive"]:
-                continue
+            if not bird["alive"]: continue
 
             obs = [
                 bird["y"] / base_game.SCREEN_HEIGHT,
@@ -437,52 +378,39 @@ def visualize_generation():
                 ((base_game.pipe_pairs[0][0].height + base_game.PIPE_GAP / 2) - bird["y"]) / base_game.SCREEN_HEIGHT,
                 base_game.pipe_pairs[0][0].height / base_game.SCREEN_HEIGHT,
                 base_game.pipe_pairs[0][1].top / base_game.SCREEN_HEIGHT
-                # base_game.PIPE_VELOCITY
             ]
 
             x = torch.tensor(obs, dtype=torch.float32)
             output = bird["model"](x).item()
             action = 1 if output > 0.5 else 0
 
-            if action == 1:
-                bird["velocity"] = base_game.FLAP_STRENGTH
-
+            if action == 1: bird["velocity"] = base_game.FLAP_STRENGTH
             bird["velocity"] += base_game.GRAVITY
             bird["y"] += bird["velocity"]
 
             bird_rect = pygame.Rect(50, int(bird["y"]), base_game.BIRD_SIZE, base_game.BIRD_SIZE)
 
-            # Dessin de l'oiseau # Affichage
             angle = -base_game.bird_velocity * 3
             rotated_bird = pygame.transform.rotate(base_game.bird_img, angle)
             base_game.screen.blit(rotated_bird, (bird_rect.x - 20, bird_rect.y - 10))
 
-
-
-            # Collision
             top_pipe, bottom_pipe = base_game.pipe_pairs[0]
             if bird_rect.colliderect(top_pipe) or bird_rect.colliderect(bottom_pipe) or bird["y"] < 0 or bird["y"] > base_game.SCREEN_HEIGHT:
                 bird["alive"] = False
                 continue
 
-            # Score si passe un tuyau
             if top_pipe.right < bird_rect.left:
                 bird["score"] += 1
-
-            # debug
-            #pygame.draw.circle(base_game.screen, bird["color"], bird_rect.center, base_game.BIRD_SIZE // 2)
 
             all_dead = False
 
         pygame.display.flip()
         steps += 1
-
-        if all_dead:
-            done = True
+        if all_dead: done = True
 
     print("✅ Visualisation terminée.")
+    random.seed() # On libère la seed ici aussi
     pygame.time.wait(1500)
-
 
 def play_best_ai():
     global best_model_ever
@@ -496,27 +424,20 @@ def play_best_ai():
     running = True
     game_clock.tick(SETTINGS["FPS"])
     time_rate = SETTINGS["FPS"]
+    
     while running:
-
         game_clock.tick(time_rate)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.display.quit()  # ferme juste la fenêtre
+                pygame.display.quit()
                 running = False
                 return
-
-
             if event.type == pygame.KEYDOWN:
-
-                if event.key == pygame.K_LEFT:
-                    time_rate = 12
-                elif event.key == pygame.K_RIGHT:
-                    time_rate = 400
-            else :
+                if event.key == pygame.K_LEFT: time_rate = 12
+                elif event.key == pygame.K_RIGHT: time_rate = 480
+            else:
                 time_rate = SETTINGS["FPS"]
-
-
 
         x = torch.tensor(np.array(obs), dtype=torch.float32)
         output = best_model_ever(x).item()
@@ -526,26 +447,26 @@ def play_best_ai():
 
         game.screen.fill((135, 206, 235))
         bird_rect = pygame.Rect(50, int(game.bird_y), game.BIRD_SIZE, game.BIRD_SIZE)
-        #pygame.draw.rect(game.screen, (255, 255, 0), bird_rect)
 
-
-
-        angle = -game.bird_velocity * 3  # négatif = vers le haut
+        angle = -game.bird_velocity * 3
         rotated_bird = pygame.transform.rotate(game.bird_img, angle)
         game.screen.blit(rotated_bird, (bird_rect.x -20 , bird_rect.y -10))
 
         game.update_pipes(bird_rect, draw=True)
 
-        font = pygame.font.Font(None, 36)
+        font = pygame.font.Font(None, 36) 
         text = font.render(f"Score: {game.score}", True, (0, 0, 0))
         game.screen.blit(text, (10, 10))
-        game.screen.blit(f"Output: {output:.2f}", (50, 10))
+        
+        # CORRECTION 4 : Le texte de l'output est proprement rendu en Surface
+        text_output = font.render(f"Output: {output:.2f}", True, (255, 0, 0))
+        game.screen.blit(text_output, (10, 50))
+        
         pygame.display.flip()
 
         if done:
             pygame.time.wait(1500)
             obs = game.reset()
-
 
 def customize_settings():
     print("\n--- Personnalisation des paramètres d'évolution ---")
@@ -558,7 +479,6 @@ def customize_settings():
             else:
                 SETTINGS[key] = int(new_value)
     print("✅ Paramètres mis à jour.")
-
 
 def Menu():
     print("\n=== MENU PRINCIPAL ===")
@@ -588,7 +508,6 @@ def Menu():
         customize_settings()
     elif choice == '5':
         visualize_generation()
-
     elif choice == '6':
         global best_model_ever
         if best_model_ever is not None:
@@ -636,7 +555,6 @@ def Menu():
         print("Choix non reconnu.")
 
     Menu()
-
 
 if __name__ == "__main__":
     Menu()
