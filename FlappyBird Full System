@@ -12,10 +12,10 @@ import json
 SETTINGS = {
     "SCREEN_WIDTH": 1000,
     "SCREEN_HEIGHT": 600,
-    "PIPE_WIDTH": 80,
+    "PIPE_WIDTH": 100,
     "PIPE_HEIGHT": 500,
     "PIPE_GAP": 175,
-    "PIPE_VELOCITY": 2, 
+    "PIPE_VELOCITY": 4, 
     "BIRD_SIZE": 30, 
     "GRAVITY": 0.5,
     "FLAP_STRENGTH": -10,
@@ -55,11 +55,13 @@ class FlappyBirdGame:
         self.GRAVITY = self.settings["GRAVITY"]
         self.FLAP_STRENGTH = self.settings["FLAP_STRENGTH"]
         self.mg = 180
+        self.time_rate = SETTINGS["FPS"]
 
         self.render_mode = render_mode
         self.screen = None
         
         if self.render_mode == "human":
+            pygame.init()
             self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
             pygame.display.set_caption("Flappy Bird")
 
@@ -76,6 +78,7 @@ class FlappyBirdGame:
     def reset(self):
         self.bird_y = self.SCREEN_HEIGHT // 2
         self.bird_velocity = 0
+        self.next_pipe_id = 0
         self.pipe_pairs = [self.create_pipe_pair()]
         self.score = 0
         self.passed_pipes = set()
@@ -87,14 +90,16 @@ class FlappyBirdGame:
         top_pipe = pygame.Rect(self.SCREEN_WIDTH, 0, self.PIPE_WIDTH, gap_y)
         bottom_pipe = pygame.Rect(self.SCREEN_WIDTH, gap_y + self.PIPE_GAP, self.PIPE_WIDTH,
                                   self.SCREEN_HEIGHT - (gap_y + self.PIPE_GAP))
-        return (top_pipe, bottom_pipe)
+        pipe_id = self.next_pipe_id
+        self.next_pipe_id += 1
+        return (top_pipe, bottom_pipe, pipe_id)
 
     def update_pipes(self, bird_rect, draw=False, fps_augmented=False):
         reward = 0
         new_pipe_needed = False
         self.pipe_vel = self.PIPE_VELOCITY * 2 if fps_augmented else self.PIPE_VELOCITY
 
-        for i, (top_pipe, bottom_pipe) in enumerate(self.pipe_pairs):
+        for i, (top_pipe, bottom_pipe, pipe_id) in enumerate(self.pipe_pairs):
             top_pipe.x -= self.pipe_vel
             bottom_pipe.x -= self.pipe_vel
 
@@ -113,10 +118,10 @@ class FlappyBirdGame:
 
             # --- CORRECTION DU BUG DE SCORE ---
             if top_pipe.right < bird_rect.left:
-                if i not in self.passed_pipes:  # Vérifie que le tuyau n'a pas DÉJÀ été compté
+                if pipe_id not in self.passed_pipes:  # Vérifie que le tuyau n'a pas DÉJÀ été compté
                     self.score += 1
                     reward += 5   # Belle récompense pour l'IA
-                    self.passed_pipes.add(i)
+                    self.passed_pipes.add(pipe_id)
 
             if top_pipe.centerx < self.SCREEN_WIDTH // 2 and i == len(self.pipe_pairs) - 1:
                 new_pipe_needed = True
@@ -124,14 +129,14 @@ class FlappyBirdGame:
         if new_pipe_needed:
             self.pipe_pairs.append(self.create_pipe_pair())
 
-        self.pipe_pairs = [(top, bottom) for (top, bottom) in self.pipe_pairs if top.right > 0]
+        self.pipe_pairs = [(top, bottom, pipe_id) for (top, bottom, pipe_id) in self.pipe_pairs if top.right > 0]
         return reward
 
     def draw_pipes(self):
         if not self.screen:
             return
 
-        for top_pipe, bottom_pipe in self.pipe_pairs:
+        for top_pipe, bottom_pipe, _ in self.pipe_pairs:
             top_x = top_pipe.centerx - self.pipe_img.get_width() // 2 - 6
             top_y = top_pipe.bottom - self.pipe_img_flipped.get_height() + self.mg
             bottom_x = bottom_pipe.centerx - self.pipe_img.get_width() // 2 - 6
@@ -142,7 +147,7 @@ class FlappyBirdGame:
 
     def get_obs(self):
         next_pipe = None
-        for (top, bottom) in self.pipe_pairs:
+        for (top, bottom, _) in self.pipe_pairs:
             if top.right >= 50:
                 next_pipe = (top, bottom)
                 break
@@ -191,6 +196,7 @@ class FlappyBirdGame:
         running = True
         self.reset()
         pygame.time.wait(500)
+        speed_multiplier = 1
 
         while running:
             self.clock.tick(SETTINGS["FPS"])
@@ -204,15 +210,28 @@ class FlappyBirdGame:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:
                         action = 1
+                    elif event.key == pygame.K_LEFT:
+                        speed_multiplier = max(1, speed_multiplier // 2)
+                    elif event.key == pygame.K_RIGHT:
+                        speed_multiplier *= 2
+                    elif event.key == pygame.K_UP:
+                        speed_multiplier += 1
+                    elif event.key == pygame.K_DOWN:
+                        speed_multiplier = max(1, speed_multiplier - 1)
 
-            if action == 1:
-                self.bird_velocity = self.FLAP_STRENGTH
+            for _ in range(speed_multiplier):
+                if action == 1:
+                    self.bird_velocity = self.FLAP_STRENGTH
+                    action = 0
 
-            self.bird_velocity += self.GRAVITY
-            self.bird_y += self.bird_velocity
-            bird_rect = pygame.Rect(50, int(self.bird_y), self.BIRD_SIZE, self.BIRD_SIZE)
+                self.bird_velocity += self.GRAVITY
+                self.bird_y += self.bird_velocity
+                bird_rect = pygame.Rect(50, int(self.bird_y), self.BIRD_SIZE, self.BIRD_SIZE)
 
-            reward = self.update_pipes(bird_rect)
+                reward = self.update_pipes(bird_rect)
+                if self.bird_y < 0 or self.bird_y > self.SCREEN_HEIGHT:
+                    self.done = True
+                    break
 
             if self.bird_y < 0 or self.bird_y > self.SCREEN_HEIGHT:
                 self.done = True
@@ -226,6 +245,8 @@ class FlappyBirdGame:
             font = pygame.font.Font(None, 36)
             text = font.render(f"Score: {self.score}", True, (0, 0, 0))
             self.screen.blit(text, (10, 10))
+            speed_text = font.render(f"Speed: {self.time_rate}", True, (0, 0, 0))
+            self.screen.blit(speed_text, (10, 50))
             pygame.display.flip()
 
             if self.done:
@@ -405,7 +426,8 @@ def visualize_generation():
             "alive": True,
             "model": model,
             "color": (random.randint(50, 255), random.randint(50, 255), random.randint(50, 255)),
-            "score": 0
+            "score": 0,
+            "passed_pipes": set()
         }
         birds.append(bird)
 
@@ -414,26 +436,94 @@ def visualize_generation():
     game_clock.tick(SETTINGS["FPS"])
     time_rate = SETTINGS["FPS"]
     
+    speed_multiplier = 1
     while not done:
-        game_clock.tick(time_rate)
+        game_clock.tick(SETTINGS["FPS"])
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.display.quit()
                 return
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_LEFT: time_rate = 12
-                elif event.key == pygame.K_RIGHT: time_rate = 480
-            else:
-                time_rate = SETTINGS["FPS"]
+                if event.key == pygame.K_LEFT:
+                    speed_multiplier = max(1, speed_multiplier // 2)
+                elif event.key == pygame.K_RIGHT:
+                    speed_multiplier = min(960, speed_multiplier * 2)
+                elif event.key == pygame.K_UP:
+                    speed_multiplier = min(960, speed_multiplier + 1)
+                elif event.key == pygame.K_DOWN:
+                    speed_multiplier = max(1, speed_multiplier - 1)
 
         base_game.screen.fill((135, 206, 235))
         dummy_rect = pygame.Rect(50, 0, base_game.BIRD_SIZE, base_game.BIRD_SIZE)
-        base_game.update_pipes(dummy_rect, draw=True, fps_augmented=True)
 
-        all_dead = True
-        for bird in birds:
-            if not bird["alive"]: continue
+        for step in range(speed_multiplier):
+            draw = step == speed_multiplier - 1
+            base_game.update_pipes(dummy_rect, draw=draw, fps_augmented=True)
+
+            all_dead = True
+            for bird in birds:
+                if not bird["alive"]:
+                    continue
+
+                obs = [
+                    bird["y"] / base_game.SCREEN_HEIGHT,
+                    bird["velocity"] / 10.0,
+                    base_game.pipe_pairs[0][0].left / base_game.SCREEN_WIDTH,
+                    ((base_game.pipe_pairs[0][0].height + base_game.PIPE_GAP / 2) - bird["y"]) / base_game.SCREEN_HEIGHT,
+                    base_game.pipe_pairs[0][0].height / base_game.SCREEN_HEIGHT,
+                    base_game.pipe_pairs[0][1].top / base_game.SCREEN_HEIGHT
+                ]
+
+                x = torch.tensor(obs, dtype=torch.float32)
+                output = bird["model"](x).item()
+                action = 1 if output > 0.5 else 0
+
+                if action == 1:
+                    bird["velocity"] = base_game.FLAP_STRENGTH
+                bird["velocity"] += base_game.GRAVITY
+                bird["y"] += bird["velocity"]
+
+                bird_rect = pygame.Rect(50, int(bird["y"]), base_game.BIRD_SIZE, base_game.BIRD_SIZE)
+
+                angle = -base_game.bird_velocity * 3
+                rotated_bird = pygame.transform.rotate(base_game.bird_img, angle)
+                if draw:
+                    base_game.screen.blit(rotated_bird, (bird_rect.x - 20, bird_rect.y - 10))
+
+                for i, (top_pipe, bottom_pipe, pipe_id) in enumerate(base_game.pipe_pairs):
+                    if bird_rect.colliderect(top_pipe) or bird_rect.colliderect(bottom_pipe):
+                        bird["alive"] = False
+                        break
+                    if bird["y"] < 0 or bird["y"] > base_game.SCREEN_HEIGHT:
+                        bird["alive"] = False
+                        break
+                    if top_pipe.right < bird_rect.left and pipe_id not in bird["passed_pipes"]:
+                        bird["score"] += 1
+                        bird["passed_pipes"].add(pipe_id)
+
+                if bird["alive"]:
+                    all_dead = False
+
+            if all_dead:
+                break
+
+        # Display scores for alive birds
+        font = pygame.font.Font(None, 28)
+        y_offset = 10
+        for i, bird in enumerate(birds):
+            if bird["alive"]:
+                text = font.render(f"Bird {i + 1}: {bird['score']}", True, (0, 0, 0))
+                base_game.screen.blit(text, (10, y_offset))
+                y_offset += 30
+
+        speed_text = font.render(f"Speed: {speed_multiplier}x", True, (0, 0, 0))
+        base_game.screen.blit(speed_text, (10, y_offset))
+
+        pygame.display.flip()
+        steps += 1
+        if all_dead:
+            done = True
 
             obs = [
                 bird["y"] / base_game.SCREEN_HEIGHT,
@@ -458,15 +548,34 @@ def visualize_generation():
             rotated_bird = pygame.transform.rotate(base_game.bird_img, angle)
             base_game.screen.blit(rotated_bird, (bird_rect.x - 20, bird_rect.y - 10))
 
-            top_pipe, bottom_pipe = base_game.pipe_pairs[0]
-            if bird_rect.colliderect(top_pipe) or bird_rect.colliderect(bottom_pipe) or bird["y"] < 0 or bird["y"] > base_game.SCREEN_HEIGHT:
-                bird["alive"] = False
+            # Check collisions and score for all pipes
+            for i, (top_pipe, bottom_pipe, pipe_id) in enumerate(base_game.pipe_pairs):
+                if bird_rect.colliderect(top_pipe) or bird_rect.colliderect(bottom_pipe):
+                    bird["alive"] = False
+                    break
+                if bird["y"] < 0 or bird["y"] > base_game.SCREEN_HEIGHT:
+                    bird["alive"] = False
+                    break
+                if top_pipe.right < bird_rect.left and pipe_id not in bird["passed_pipes"]:
+                    bird["score"] += 1
+                    bird["passed_pipes"].add(pipe_id)
+
+            if not bird["alive"]:
                 continue
 
-            if top_pipe.right < bird_rect.left:
-                bird["score"] += 1
-
             all_dead = False
+
+        # Display scores for alive birds
+        font = pygame.font.Font(None, 28)
+        y_offset = 10
+        for i, bird in enumerate(birds):
+            if bird["alive"]:
+                text = font.render(f"Bird {i + 1}: {bird['score']}", True, (0, 0, 0))
+                base_game.screen.blit(text, (10, y_offset))
+                y_offset += 30
+
+        speed_text = font.render(f"FPS: {time_rate}", True, (0, 0, 0))
+        base_game.screen.blit(speed_text, (10, y_offset))
 
         pygame.display.flip()
         steps += 1
@@ -486,11 +595,10 @@ def play_best_ai():
     game_clock = pygame.time.Clock()
     obs = game.reset()
     running = True
-    game_clock.tick(SETTINGS["FPS"])
-    time_rate = SETTINGS["FPS"]
+    speed_multiplier = 1
     
     while running:
-        game_clock.tick(time_rate)
+        game_clock.tick(SETTINGS["FPS"])
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -498,16 +606,23 @@ def play_best_ai():
                 running = False
                 return
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_LEFT: time_rate = 12
-                elif event.key == pygame.K_RIGHT: time_rate = 480
-            else:
-                time_rate = SETTINGS["FPS"]
+                if event.key == pygame.K_LEFT:
+                    speed_multiplier = max(1, speed_multiplier // 2)
+                elif event.key == pygame.K_RIGHT:
+                    speed_multiplier = min(960, speed_multiplier * 2)
+                elif event.key == pygame.K_UP:
+                    speed_multiplier = min(960, speed_multiplier + 1)
+                elif event.key == pygame.K_DOWN:
+                    speed_multiplier = max(1, speed_multiplier - 1)
 
-        x = torch.tensor(np.array(obs), dtype=torch.float32)
-        output = best_model_ever(x).item()
-        action = 1 if output > 0.5 else 0
-
-        obs, reward, done, _ = game.step(action)
+        done = False
+        for _ in range(speed_multiplier):
+            x = torch.tensor(np.array(obs), dtype=torch.float32)
+            output = best_model_ever(x).item()
+            action = 1 if output > 0.5 else 0
+            obs, reward, done, _ = game.step(action)
+            if done:
+                break
 
         game.screen.fill((135, 206, 235))
         game.draw_pipes()
@@ -520,9 +635,11 @@ def play_best_ai():
         font = pygame.font.Font(None, 36)
         text = font.render(f"Score: {game.score}", True, (0, 0, 0))
         game.screen.blit(text, (10, 10))
+        speed_text = font.render(f"Speed: {speed_multiplier}x", True, (0, 0, 0))
+        game.screen.blit(speed_text, (10, 50))
         
         text_output = font.render(f"Output: {output:.2f}", True, (255, 0, 0))
-        game.screen.blit(text_output, (10, 50))
+        game.screen.blit(text_output, (10, 90))
         
         pygame.display.flip()
 
@@ -532,7 +649,7 @@ def play_best_ai():
 
 def customize_settings():
     print("\n--- Personnalisation des paramètres d'évolution ---")
-    for key in ["POP_SIZE", "HIDDEN_SIZE", "GENERATIONS", "MAX_STEPS", "MUTATION_STD"]:
+    for key in ["POP_SIZE", "HIDDEN_SIZE", "GENERATIONS", "MAX_STEPS", "MUTATION_STD", "MUTATION_RATE"]:
         current = SETTINGS[key]
         new_value = input(f"{key} (actuel: {current}) : ")
         if new_value:
