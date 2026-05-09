@@ -4,9 +4,12 @@ import random
 from game import SETTINGS
 
 # Device detection: Use GPU if available, otherwise CPU
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device('cpu') # ! IDK why but GPU is slower than CPU for this project
 if torch.cuda.is_available():
     print(f"🚀 GPU detected: {torch.cuda.get_device_name(0)} | Computing on CUDA")
+else : 
+    print("⚠️  No GPU detected. Computing on CPU (this will be slower).")
 
 class NeuralNet(nn.Module):
     def __init__(self, input_size=6, hidden_size=None):
