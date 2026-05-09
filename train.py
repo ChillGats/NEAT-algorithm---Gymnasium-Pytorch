@@ -9,7 +9,7 @@ import torch
 import os
 import json
 from game import FlappyBirdGame, SETTINGS
-from model import NeuralNet, crossover, mutate
+from model import NeuralNet, crossover, mutate, DEVICE
 import pygame
 
 best_model = None
@@ -46,7 +46,6 @@ def evolutionary_training():
     stats = {
         "best_scores": [],
         "avg_scores": [],
-        "worst_scores": [],
         "improvements": [],
         "max_steps_hits": 0,
         "best_hit_max_steps_consecutive": 0,  # Track consecutive MAX_STEPS hits on best model
@@ -91,8 +90,8 @@ def evolutionary_training():
             
             # Game loop until collision or max steps
             while not game.done and steps < SETTINGS["MAX_STEPS"]:
-                # Convert observation to tensor
-                x = torch.tensor(obs, dtype=torch.float32)
+                # Convert observation to tensor and move to device
+                x = torch.tensor(obs, dtype=torch.float32).to(DEVICE)
                 # Get network output (0-1)
                 output = model(x).item()
                 # Threshold at 0.5: 1=flap, 0=no flap
@@ -117,13 +116,12 @@ def evolutionary_training():
         elites = [p[1] for p in sorted_pairs[:ELITE_SIZE]]
         
         best_score = sorted_pairs[0][0]
-        worst_score = sorted_pairs[-1][0]
+        best_score = sorted_pairs[0][0]
         avg_score = sum(scores) / len(scores)
         
         # Record statistics
         stats["best_scores"].append(best_score)
         stats["avg_scores"].append(avg_score)
-        stats["worst_scores"].append(worst_score)
         stats["max_steps_hits"] += hit_max_steps_count
 
         # Determine status symbol for this generation
@@ -139,7 +137,7 @@ def evolutionary_training():
             stats["best_hit_max_steps_consecutive"] = 0  # Reset counter
 
         # Print generation stats
-        print(f"Gen {gen + 1:02d}/{SETTINGS['GENERATIONS']} | Avg: {avg_score:6.2f} | Top: {best_score:6.0f} | Worst: {worst_score:6.0f} | {status}")
+        print(f"Gen {gen + 1:02d}/{SETTINGS['GENERATIONS']} | Avg: {avg_score:6.2f} | Top: {best_score:6.0f} | {status}")
 
         # Track all-time best model
         if best_score > best_score_ever:
@@ -212,11 +210,6 @@ def evolutionary_training():
             first_improvement_gen = stats["improvements"][0] + 1
             print(f"   ⚡ First improvement: Generation {first_improvement_gen}")
             print(f"   📍 Generations with improvement: {len(stats['improvements'])} / {len(stats['best_scores'])}")
-        
-        # Population diversity
-        overall_best = max(stats["best_scores"])
-        overall_worst = min(stats["worst_scores"])
-        print(f"   🎯 Population spread: Best={overall_best:.0f}, Worst={overall_worst:.0f}, Range={overall_best - overall_worst:.0f}")
     
     print("="*80 + "\n")
     
