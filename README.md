@@ -87,9 +87,9 @@ Uses cubic decay: `mutation_rate = base × (1 - (gen/max_gen)³)`
 
 | Generation | Best Score | Avg Score | Status |
 |------------|-----------|-----------|--------|
-| 1-5 | 3-10 pipes | 1-3 | Random exploration |
-| 5-15 | 20-50 pipes | 8-15 | Learning begins |
-| **10-25** | **50-150 pipes** | **25-60** | **Take-off phase (most important)** |
+| 1-5 | 1-2 pipes | 0-1 | Random exploration |
+| 5-15 | 2 pipes | 2-5 | Learning begins |
+| **10-25** | **50-150 pipes** | **10-15** | **Take-off phase (most important)** |
 | 25-40 | 150-300 pipes | 80-130 | Refinement |
 | 40-50 | 300+ pipes | 150-250 | Convergence (hitting MAX_STEPS) |
 
