@@ -209,7 +209,7 @@ POP_SIZE: 50
 ## 📈 Performance Tuning
 
 **To get higher scores:**
-- ↑ Increase `MAX_STEPS` (gives more time to learn, but slower training)
+- ↑ Increase `MAX_STEPS` (gives more time to learn and increase robustness, but slower training)
 - ↑ Increase `GENERATIONS` (more evolution time)
 - ↑ Increase `POP_SIZE` (more genetic diversity)
 
