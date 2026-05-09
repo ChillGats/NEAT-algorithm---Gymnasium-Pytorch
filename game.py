@@ -10,8 +10,7 @@ import json
 
 # === SETTINGS & PARAMETERS ===
 SETTINGS = {
-    "SCREEN_WIDTH": 1000,
-    "SCREEN_HEIGHT": 600,
+    "SCREEN_WIDTH": 1000, # ! I want to make the height and width modifiable ( and in game as well ( to make the window size controllable)) 
     "PIPE_WIDTH": 80,
     "PIPE_HEIGHT": 500,
     "PIPE_GAP": 175,
@@ -23,7 +22,7 @@ SETTINGS = {
     "HIDDEN_SIZE": 32,
     "POP_SIZE": 35,
     "GENERATIONS": 50,
-    "MAX_STEPS": 35000,  # Allows ~350 pipes per game (enough for infinite scoring)
+    "MAX_STEPS": 35000,  # Allows ~1000 pipes per game (enough for infinite scoring)
     "MUTATION_STD": 0.1,
     "MUTATION_RATE": 0.25,
 
