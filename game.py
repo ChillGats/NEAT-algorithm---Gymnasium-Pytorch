@@ -8,24 +8,24 @@ import time
 import os
 import json
 
-# === PARAMÈTRES SIMULATION ===
+# === SETTINGS & PARAMETERS ===
 SETTINGS = {
     "SCREEN_WIDTH": 1000,
     "SCREEN_HEIGHT": 600,
     "PIPE_WIDTH": 80,
     "PIPE_HEIGHT": 500,
     "PIPE_GAP": 175,
-    "PIPE_VELOCITY": 2, 
+    "PIPE_VELOCITY": 5, 
     "BIRD_SIZE": 30, 
     "GRAVITY": 0.5,
     "FLAP_STRENGTH": -10,
 
     "HIDDEN_SIZE": 32,
-    "POP_SIZE": 25,
+    "POP_SIZE": 35,
     "GENERATIONS": 50,
-    "MAX_STEPS": 5000,
-    "MUTATION_STD": 0.05,
-    "MUTATION_RATE": 0.2,
+    "MAX_STEPS": 35000,  # Allows ~350 pipes per game (enough for infinite scoring)
+    "MUTATION_STD": 0.1,
+    "MUTATION_RATE": 0.25,
 
     "FPS": 60,
     "VISUAL_DELAY": 10
