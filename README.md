@@ -194,7 +194,7 @@ POP_SIZE: 25
 ```python
 MAX_STEPS: 50000
 GENERATIONS: 50
-POP_SIZE: 25
+POP_SIZE: 30
 # Result: Best 500-1000+ pipes, avg ~200+
 ```
 
@@ -202,7 +202,7 @@ POP_SIZE: 25
 ```python
 MAX_STEPS: 5000
 GENERATIONS: 100
-POP_SIZE: 25
+POP_SIZE: 50
 # Result: More generations to find solutions, handles local optima better
 ```
 
