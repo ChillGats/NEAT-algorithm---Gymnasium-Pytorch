@@ -3,7 +3,7 @@ import random
 import numpy as np
 import torch
 from game import FlappyBirdGame, SETTINGS
-from model import NeuralNet
+from model import NeuralNet, DEVICE
 import train
 
 load_generation_models = train.load_generation_models
@@ -36,21 +36,24 @@ def visualize_generation():
 
     steps = 0
     done = False
-    game_clock.tick(SETTINGS["FPS"])
-    time_rate = SETTINGS["FPS"]
+    speed_multiplier = 1
     
     while not done:
-        game_clock.tick(time_rate)
+        game_clock.tick(SETTINGS["FPS"])
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.display.quit()
                 return
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_LEFT: time_rate = 12
-                elif event.key == pygame.K_RIGHT: time_rate = 480
-            else:
-                time_rate = SETTINGS["FPS"]
+                if event.key == pygame.K_LEFT:
+                    speed_multiplier = max(1, speed_multiplier // 2)
+                elif event.key == pygame.K_RIGHT:
+                    speed_multiplier = min(960, speed_multiplier * 2)
+                elif event.key == pygame.K_UP:
+                    speed_multiplier = min(960, speed_multiplier + 1)
+                elif event.key == pygame.K_DOWN:
+                    speed_multiplier = max(1, speed_multiplier - 1)
 
         base_game.screen.fill((135, 206, 235))
         dummy_rect = pygame.Rect(50, 0, base_game.BIRD_SIZE, base_game.BIRD_SIZE)
@@ -70,7 +73,7 @@ def visualize_generation():
                 next_pipe["bottom"].top / base_game.SCREEN_HEIGHT
             ]
 
-            x = torch.tensor(obs, dtype=torch.float32)
+            x = torch.tensor(obs, dtype=torch.float32).to(DEVICE)
             output = bird["model"](x).item()
             action = 1 if output > 0.5 else 0
 
@@ -105,6 +108,12 @@ def visualize_generation():
 
             all_dead = False
 
+        # Display speed multiplier
+        font = pygame.font.Font(None, 28)
+        speed_text = font.render(f"Speed: {speed_multiplier}x", True, (255, 255, 255))
+        pygame.draw.rect(base_game.screen, (0, 0, 0), (5, 5, 150, 30))
+        base_game.screen.blit(speed_text, (10, 10))
+        
         pygame.display.flip()
         steps += 1
         if all_dead: done = True
@@ -117,16 +126,15 @@ def play_best_ai():
     if train.best_model_ever is None:
         print("❌ Aucun modèle chargé ou entraîné.")
         return
-    print(train.best_model_ever)
+    
     game = FlappyBirdGame(render_mode="human")
     game_clock = pygame.time.Clock()
     obs = game.reset()
     running = True
-    game_clock.tick(SETTINGS["FPS"])
-    time_rate = SETTINGS["FPS"]
+    speed_multiplier = 1
     
     while running:
-        game_clock.tick(time_rate)
+        game_clock.tick(SETTINGS["FPS"])
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -134,16 +142,23 @@ def play_best_ai():
                 running = False
                 return
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_LEFT: time_rate = 12
-                elif event.key == pygame.K_RIGHT: time_rate = 480
-            else:
-                time_rate = SETTINGS["FPS"]
+                if event.key == pygame.K_LEFT:
+                    speed_multiplier = max(1, speed_multiplier // 2)
+                elif event.key == pygame.K_RIGHT:
+                    speed_multiplier = min(960, speed_multiplier * 2)
+                elif event.key == pygame.K_UP:
+                    speed_multiplier = min(960, speed_multiplier + 1)
+                elif event.key == pygame.K_DOWN:
+                    speed_multiplier = max(1, speed_multiplier - 1)
 
-        x = torch.tensor(np.array(obs), dtype=torch.float32)
-        output = train.best_model_ever(x).item()
-        action = 1 if output > 0.5 else 0
-
-        obs, reward, done, _ = game.step(action)
+        done = False
+        for _ in range(speed_multiplier):
+            x = torch.tensor(np.array(obs), dtype=torch.float32).to(DEVICE)
+            output = train.best_model_ever(x).item()
+            action = 1 if output > 0.5 else 0
+            obs, reward, done, _ = game.step(action)
+            if done:
+                break
 
         game.screen.fill((135, 206, 235))
         game.draw_pipes()
@@ -159,6 +174,9 @@ def play_best_ai():
         
         text_output = font.render(f"Output: {output:.2f}", True, (255, 0, 0))
         game.screen.blit(text_output, (10, 50))
+        
+        speed_text = font.render(f"Speed: {speed_multiplier}x", True, (0, 100, 0))
+        game.screen.blit(speed_text, (10, 90))
         
         pygame.display.flip()
 
