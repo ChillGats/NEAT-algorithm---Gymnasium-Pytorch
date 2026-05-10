@@ -43,8 +43,8 @@ def visualize_generation():
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.display.quit()
-                return
+                done = True
+                break
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_LEFT:
                     speed_multiplier = max(1, speed_multiplier // 2)
